@@ -126,7 +126,8 @@
     }
 
     input,
-    select {
+    select,
+    textarea {
       width: 100%;
       border: 1px solid #bac4cf;
       border-radius: 6px;
@@ -140,9 +141,16 @@
     }
 
     input:focus,
-    select:focus {
+    select:focus,
+    textarea:focus {
       outline: 3px solid rgba(28, 117, 188, 0.18);
       border-color: var(--blue);
+    }
+
+    textarea {
+      min-height: 96px;
+      resize: vertical;
+      line-height: 1.35;
     }
 
     .bill-controls {
@@ -217,6 +225,7 @@
       align-items: center;
       justify-content: center;
       overflow: hidden;
+      position: relative;
     }
 
     .preview-wrap img {
@@ -235,6 +244,78 @@
       line-height: 1.4;
     }
 
+    .preview-level-line {
+      display: none;
+      position: absolute;
+      left: 8%;
+      right: 8%;
+      top: 50%;
+      border-top: 2px solid rgba(238, 105, 42, 0.92);
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.75);
+      pointer-events: none;
+      transform-origin: 50% 50%;
+    }
+
+    .preview-guide-line {
+      display: none;
+      position: absolute;
+      left: 8%;
+      right: 8%;
+      border-top: 2px solid rgba(28, 117, 188, 0.92);
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.75);
+      pointer-events: none;
+      transform-origin: 50% 50%;
+    }
+
+    .preview-guide-line::after {
+      position: absolute;
+      right: 0;
+      top: -22px;
+      background: rgba(255, 255, 255, 0.88);
+      border: 1px solid rgba(174, 184, 195, 0.8);
+      border-radius: 4px;
+      color: #111111;
+      content: attr(data-label);
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 2px 5px;
+    }
+
+    .preview-zero-line {
+      border-top-color: rgba(238, 105, 42, 0.95);
+    }
+
+    .preview-vertical-line {
+      display: none;
+      position: absolute;
+      top: 18%;
+      bottom: 12%;
+      border-left: 2px solid rgba(22, 124, 75, 0.95);
+      box-shadow: 1px 0 0 rgba(255, 255, 255, 0.75);
+      pointer-events: none;
+    }
+
+    .preview-vertical-line::after {
+      position: absolute;
+      left: 4px;
+      top: -18px;
+      background: rgba(255, 255, 255, 0.88);
+      border: 1px solid rgba(174, 184, 195, 0.8);
+      border-radius: 4px;
+      color: #111111;
+      content: attr(data-label);
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 2px 5px;
+      white-space: nowrap;
+    }
+
+    .preview-wrap.has-image .preview-level-line,
+    .preview-wrap.has-image .preview-guide-line,
+    .preview-wrap.has-image .preview-vertical-line {
+      display: block;
+    }
+
     .photo-tools {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -245,6 +326,24 @@
 
     .tilt-control {
       margin-top: 12px;
+    }
+
+    .calibration-controls {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .calibration-control label {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .calibration-value {
+      color: var(--muted);
+      font-weight: 700;
+      white-space: nowrap;
     }
 
     .tilt-control-row {
@@ -268,12 +367,25 @@
       font-size: 0.9rem;
     }
 
+    .tilt-hint {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 0.78rem;
+      line-height: 1.25;
+    }
+
     .photo-status {
       margin-top: 10px;
       color: var(--muted);
       font-size: 0.9rem;
       line-height: 1.35;
       min-height: 20px;
+    }
+
+    .ai-import {
+      margin-top: 14px;
+      border-top: 1px solid var(--line);
+      padding-top: 12px;
     }
 
     .table-wrap {
@@ -714,7 +826,7 @@
           <h2>Bill Month</h2>
           <div class="bill-controls">
             <div>
-              <label for="currentMonth">Current bill month</label>
+              <label for="currentMonth">Current bill month (last graph month)</label>
               <select id="currentMonth"></select>
             </div>
             <div>
@@ -723,7 +835,7 @@
             </div>
           </div>
           <button class="wide-action" id="generateMonthsBtn" type="button">Auto-calculate 13 months</button>
-          <p class="helper">The chart starts 12 months before the current bill month and runs through the selected current bill month.</p>
+          <p class="helper">Set this to the last month shown on the bill photo graph. The app then labels the previous 12 months in order.</p>
         </div>
 
         <div class="panel">
@@ -738,14 +850,18 @@
               <input id="uploadInput" type="file" accept="image/*">
             </label>
           </div>
-          <div class="preview-wrap">
+          <div class="preview-wrap" id="previewWrap">
             <img id="imagePreview" alt="Uploaded bill graph preview">
             <div class="preview-empty" id="previewEmpty">Bill photo preview will appear here so you can read the graph while entering values.</div>
+            <div class="preview-guide-line preview-top-line" id="previewTopLine" data-label="Top"></div>
+            <div class="preview-guide-line preview-zero-line" id="previewZeroLine" data-label="0 line"></div>
+            <div class="preview-vertical-line" id="previewFirstBarLine" data-label="First bar"></div>
+            <div class="preview-vertical-line" id="previewLastBarLine" data-label="Last bar"></div>
           </div>
           <div class="photo-tools">
             <div>
               <label for="graphTopValue">Bill graph top value (top y-axis number)</label>
-              <input id="graphTopValue" type="number" inputmode="decimal" min="1" step="0.1" value="39">
+              <input id="graphTopValue" type="number" inputmode="decimal" min="1" max="10000" step="1" value="39">
             </div>
             <button id="estimatePhotoBtn" type="button" class="secondary" disabled>Estimate from Photo</button>
           </div>
@@ -755,10 +871,34 @@
               <input id="tiltCorrection" type="range" min="-8" max="8" step="0.5" value="0">
               <span class="tilt-value" id="tiltValue">Auto</span>
             </div>
-            <p class="helper">Keep the graph as flat as possible. If the photo is angled, adjust this slider and tap Estimate from Photo again.</p>
+          </div>
+          <div class="calibration-controls">
+            <div class="calibration-control">
+              <label for="topGuidePosition">Top guide line <span class="calibration-value" id="topGuideValue">35%</span></label>
+              <input id="topGuidePosition" type="range" min="12" max="70" step="1" value="35">
+            </div>
+            <div class="calibration-control">
+              <label for="zeroGuidePosition">Zero baseline <span class="calibration-value" id="zeroGuideValue">76%</span></label>
+              <input id="zeroGuidePosition" type="range" min="45" max="92" step="1" value="76">
+            </div>
+            <div class="calibration-control">
+              <label for="firstBarPosition">First bar center <span class="calibration-value" id="firstBarValue">20%</span></label>
+              <input id="firstBarPosition" type="range" min="5" max="55" step="1" value="20">
+            </div>
+            <div class="calibration-control">
+              <label for="lastBarPosition">Last bar center <span class="calibration-value" id="lastBarValue">88%</span></label>
+              <input id="lastBarPosition" type="range" min="45" max="96" step="1" value="88">
+            </div>
+            <p class="tilt-hint">Line up Top, 0 line, First bar, and Last bar with the bill graph, then tap Estimate from Photo.</p>
           </div>
           <div class="photo-status" id="photoStatus" aria-live="polite"></div>
           <p class="helper">Version 1 uses the photo as a reference while you enter the daily-average kWh values manually.</p>
+          <div class="ai-import">
+            <label for="aiValuesInput">Paste AI / ChatGPT daily-average values</label>
+            <textarea id="aiValuesInput" placeholder="Example: Mar '25 25, Apr '25 26, May '25 26, Jun '25 28, Jul '25 40, Aug '25 42, Sep '25 62, Oct '25 38, Nov '25 25, Dec '25 26, Jan '26 26, Feb '26 24, Mar '26 23"></textarea>
+            <button class="wide-action secondary" id="importAiValuesBtn" type="button">Import Pasted Values</button>
+            <p class="helper">Use this when ChatGPT reads the photo better than the browser detector. The values should be daily-average kWh, not monthly totals.</p>
+          </div>
         </div>
 
         <div class="panel">
@@ -854,11 +994,26 @@
     const exportStatus = document.getElementById('exportStatus');
     const imagePreview = document.getElementById('imagePreview');
     const previewEmpty = document.getElementById('previewEmpty');
+    const previewWrap = document.getElementById('previewWrap');
+    const previewTopLine = document.getElementById('previewTopLine');
+    const previewZeroLine = document.getElementById('previewZeroLine');
     const photoStatus = document.getElementById('photoStatus');
     const estimatePhotoBtn = document.getElementById('estimatePhotoBtn');
     const graphTopValueInput = document.getElementById('graphTopValue');
     const tiltCorrectionInput = document.getElementById('tiltCorrection');
     const tiltValueEl = document.getElementById('tiltValue');
+    const topGuidePositionInput = document.getElementById('topGuidePosition');
+    const zeroGuidePositionInput = document.getElementById('zeroGuidePosition');
+    const firstBarPositionInput = document.getElementById('firstBarPosition');
+    const lastBarPositionInput = document.getElementById('lastBarPosition');
+    const topGuideValueEl = document.getElementById('topGuideValue');
+    const zeroGuideValueEl = document.getElementById('zeroGuideValue');
+    const firstBarValueEl = document.getElementById('firstBarValue');
+    const lastBarValueEl = document.getElementById('lastBarValue');
+    const previewFirstBarLine = document.getElementById('previewFirstBarLine');
+    const previewLastBarLine = document.getElementById('previewLastBarLine');
+    const aiValuesInput = document.getElementById('aiValuesInput');
+    const importAiValuesBtn = document.getElementById('importAiValuesBtn');
     const iosInstallTip = document.getElementById('iosInstallTip');
 
     let monthRows = [];
@@ -866,6 +1021,28 @@
     let uploadedImageDataUrl = '';
 
     Chart.register(ChartDataLabels);
+
+    function updateTiltGuide() {
+      const value = Number(tiltCorrectionInput.value) || 0;
+      tiltValueEl.textContent = Math.abs(value) < 0.25 ? 'Auto' : `${value > 0 ? '+' : ''}${value.toFixed(1)}°`;
+      previewTopLine.style.transform = `rotate(${value}deg)`;
+      previewZeroLine.style.transform = `rotate(${value}deg)`;
+    }
+
+    function updateCalibrationGuides() {
+      const topPct = Number(topGuidePositionInput.value) || 35;
+      const zeroPct = Number(zeroGuidePositionInput.value) || 76;
+      const firstPct = Number(firstBarPositionInput.value) || 20;
+      const lastPct = Number(lastBarPositionInput.value) || 88;
+      topGuideValueEl.textContent = `${topPct}%`;
+      zeroGuideValueEl.textContent = `${zeroPct}%`;
+      firstBarValueEl.textContent = `${firstPct}%`;
+      lastBarValueEl.textContent = `${lastPct}%`;
+      previewTopLine.style.top = `${topPct}%`;
+      previewZeroLine.style.top = `${zeroPct}%`;
+      previewFirstBarLine.style.left = `${firstPct}%`;
+      previewLastBarLine.style.left = `${lastPct}%`;
+    }
 
     function setupMobileAppHints() {
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -948,6 +1125,62 @@
       return Number.isFinite(number) ? number : NaN;
     }
 
+    function normalizeMonthToken(text) {
+      return text.toLowerCase().replace(/[^a-z]/g, '').slice(0, 3);
+    }
+
+    function importAiValues() {
+      const text = aiValuesInput.value.trim();
+      if (!text) {
+        photoStatus.textContent = 'Paste the daily-average values first.';
+        return;
+      }
+
+      const labeledValues = new Map();
+      const monthPattern = /(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s*'?((?:20)?\d{2})?\s*(?::|-|=|,)?\s*(\d+(?:\.\d+)?)(?=\s*(?:kwh|kw|daily|avg|average|,|;|\n|$))/gi;
+      let match;
+      while ((match = monthPattern.exec(text)) !== null) {
+        const month = normalizeMonthToken(match[1]);
+        const year = match[2] || '';
+        const value = Number(match[3]);
+        if (Number.isFinite(value)) {
+          const shortYear = year ? year.slice(-2) : '';
+          labeledValues.set(`${month}-${shortYear}`, value);
+          labeledValues.set(month, value);
+        }
+      }
+
+      let imported = 0;
+      if (labeledValues.size) {
+        monthRows.forEach((row) => {
+          const month = normalizeMonthToken(monthShort[row.monthIndex]);
+          const year = String(row.year).slice(-2);
+          const value = labeledValues.get(`${month}-${year}`) ?? labeledValues.get(month);
+          if (Number.isFinite(value)) {
+            row.dailyAverage = value;
+            imported += 1;
+          }
+        });
+      }
+
+      if (!imported) {
+        const values = (text.match(/-?\d+(?:\.\d+)?/g) || []).map(Number).filter(Number.isFinite);
+        if (values.length < monthRows.length) {
+          photoStatus.textContent = `I found ${values.length} numbers. Paste 13 daily-average values, or include month labels with each value.`;
+          return;
+        }
+
+        values.slice(0, monthRows.length).forEach((value, index) => {
+          monthRows[index].dailyAverage = value;
+          imported += 1;
+        });
+      }
+
+      renderTable();
+      calculateAndRender();
+      photoStatus.textContent = `Imported ${imported} daily-average values from pasted text. Review the table, then export the report.`;
+    }
+
     function readTableValues() {
       const errors = [];
       tableBody.querySelectorAll('input').forEach((input) => {
@@ -1022,7 +1255,9 @@
     function getYAxisMax(values) {
       const max = Math.max(...values, 0);
       if (max <= 0) return 2500;
-      return Math.max(500, Math.ceil((max * 1.15) / 500) * 500);
+      const roughStep = Math.pow(10, Math.floor(Math.log10(max)));
+      const step = max / roughStep < 2.5 ? roughStep / 4 : max / roughStep < 6 ? roughStep / 2 : roughStep;
+      return Math.max(500, Math.ceil((max * 1.15) / step) * step);
     }
 
     function renderChart() {
@@ -1071,7 +1306,12 @@
               anchor: 'end',
               align: 'top',
               color: '#26313d',
-              font: { weight: '800', size: 13 },
+              clamp: true,
+              clip: false,
+              font: (context) => {
+                const value = context.dataset.data[context.dataIndex] || 0;
+                return { weight: '800', size: value >= 10000 ? 10 : 13 };
+              },
               formatter: (value) => value > 0 ? value.toLocaleString() : ''
             }
           },
@@ -1127,9 +1367,9 @@
         imagePreview.src = uploadedImageDataUrl;
         imagePreview.style.display = 'block';
         previewEmpty.style.display = 'none';
+        previewWrap.classList.add('has-image');
         estimatePhotoBtn.disabled = false;
-        photoStatus.textContent = 'Photo loaded. Estimating daily-average values now...';
-        window.setTimeout(estimateFromPhoto, 80);
+        photoStatus.textContent = 'Photo loaded. Confirm the bill month/year above matches the last month shown on the photo graph, then tap Estimate from Photo.';
 
         // Future OCR/image recognition hook:
         // Analyze the uploaded SCE bill graph image here to detect bar heights
@@ -1168,6 +1408,17 @@
       const max = Math.max(r, g, b);
       const min = Math.min(r, g, b);
       return max < maxLightness && max - min < 58;
+    }
+
+    function isBarPixel(imageData, width, x, y) {
+      const i = (y * width + x) * 4;
+      const r = imageData[i];
+      const g = imageData[i + 1];
+      const b = imageData[i + 2];
+      const luma = (r * 0.299) + (g * 0.587) + (b * 0.114);
+      const max = Math.max(r, g, b);
+      const min = Math.min(r, g, b);
+      return luma < 118 && max - min < 72;
     }
 
     function darkRunOnRow(imageData, width, y, xStart, xEnd) {
@@ -1331,8 +1582,8 @@
       let gap = 0;
       let started = false;
 
-      for (let y = baseline - 1; y >= top; y -= 1) {
-        if (isDarkNeutralPixel(imageData, width, x, y, 148)) {
+      for (let y = baseline - 2; y >= top; y -= 1) {
+        if (isBarPixel(imageData, width, x, y)) {
           height += 1;
           gap = 0;
           started = true;
@@ -1368,6 +1619,61 @@
           top: frame.baseline - barHeight,
           bottom: frame.baseline,
           height: barHeight,
+          width: halfWindow * 2
+        });
+      }
+
+      return bars;
+    }
+
+    function sampleCalibratedBars(imageData, width, height) {
+      const firstPct = Number(firstBarPositionInput.value) || 20;
+      const lastPct = Number(lastBarPositionInput.value) || 88;
+      const topPct = Number(topGuidePositionInput.value) || 35;
+      const zeroPct = Number(zeroGuidePositionInput.value) || 76;
+      const firstX = firstPct / 100 * width;
+      const lastX = lastPct / 100 * width;
+      const topY = topPct / 100 * height;
+      const zeroY = zeroPct / 100 * height;
+      const step = (lastX - firstX) / 12;
+      const bars = [];
+
+      if (step <= 2 || zeroY - topY <= 12) return bars;
+
+      for (let index = 0; index < 13; index += 1) {
+        const center = firstX + step * index;
+        const halfWindow = Math.max(2, Math.round(Math.abs(step) * 0.24));
+        const topSamples = [];
+
+        for (let x = Math.max(0, Math.round(center - halfWindow)); x <= Math.min(width - 1, Math.round(center + halfWindow)); x += 1) {
+          let runTop = null;
+          let runLength = 0;
+          let bestTop = null;
+          let bestLength = 0;
+
+          for (let y = Math.round(zeroY) - 2; y >= Math.max(0, Math.round(topY) - 8); y -= 1) {
+            if (isBarPixel(imageData, width, x, y)) {
+              runTop = y;
+              runLength += 1;
+              if (runLength > bestLength) {
+                bestLength = runLength;
+                bestTop = runTop;
+              }
+            } else if (runLength) {
+              runTop = null;
+              runLength = 0;
+            }
+          }
+
+          if (bestTop !== null && bestLength >= 3) topSamples.push(bestTop);
+        }
+
+        const top = topSamples.length ? percentile(topSamples, 0.2) : zeroY;
+        bars.push({
+          center,
+          top,
+          bottom: zeroY,
+          height: zeroY - top,
           width: halfWindow * 2
         });
       }
@@ -1420,8 +1726,12 @@
         .filter((group) => group.width >= Math.max(3, plotWidth * 0.008) && group.width <= plotWidth * 0.08 && group.height >= minHeight)
         .sort((a, b) => a.center - b.center);
 
-      if (candidates.length === 13) {
-        return { bars: candidates, frame, method: 'detected' };
+      if (candidates.length >= 13) {
+        return { bars: candidates.slice(-13), frame, method: 'detected' };
+      }
+
+      if (candidates.length >= 10) {
+        return { bars: candidates, frame, method: 'detected-partial' };
       }
 
       return {
@@ -1440,26 +1750,40 @@
       try {
         photoStatus.textContent = 'Estimating daily averages from the photo...';
         const topValue = Number(graphTopValueInput.value);
-        const graphTopValue = Number.isFinite(topValue) && topValue > 0 ? topValue : 39;
+        if (!Number.isFinite(topValue) || topValue <= 0) {
+          photoStatus.textContent = 'Enter the bill graph top y-axis number first, such as 62 or 1000.';
+          return;
+        }
+        const graphTopValue = topValue;
         const image = await loadImage(uploadedImageDataUrl);
         const analysis = prepareAnalysisImage(image);
-        const result = findBillGraphBars(analysis.pixels, analysis.canvas.width, analysis.canvas.height);
-        const bars = result.bars;
+        let bars = sampleCalibratedBars(analysis.pixels, analysis.canvas.width, analysis.canvas.height);
+        if (bars.length < 13) {
+          const result = findBillGraphBars(analysis.pixels, analysis.canvas.width, analysis.canvas.height);
+          bars = result.bars;
+        }
 
-        if (!result.frame || bars.length < 6) {
+        if (bars.length < 6) {
           photoStatus.textContent = 'I could not confidently find the bars. You can still type the daily averages from the photo into the table.';
           return;
         }
 
         const selectedBars = bars.length > 13 ? bars.slice(-13) : bars;
-        const bottom = result.frame.baseline;
-        const graphHeight = Math.max(1, bottom - result.frame.top);
-        const axisBasedValues = selectedBars.map((bar) => Math.max(0, ((bottom - bar.top) / graphHeight) * graphTopValue));
-        const saturatedCount = axisBasedValues.filter((value) => value >= graphTopValue * 0.94).length;
-        const tallestBar = Math.max(...selectedBars.map((bar) => bottom - bar.top), 1);
-        const values = saturatedCount >= 8
-          ? selectedBars.map((bar) => Math.max(0, ((bottom - bar.top) / tallestBar) * graphTopValue))
-          : axisBasedValues;
+        const topY = (Number(topGuidePositionInput.value) || 35) / 100 * analysis.canvas.height;
+        const zeroY = (Number(zeroGuidePositionInput.value) || 76) / 100 * analysis.canvas.height;
+        const calibratedHeight = zeroY - topY;
+
+        if (calibratedHeight <= 12) {
+          photoStatus.textContent = 'Move the Top guide above the 0 line, then tap Estimate from Photo again.';
+          return;
+        }
+
+        const values = selectedBars.map((bar) => {
+          const value = ((zeroY - bar.top) / calibratedHeight) * graphTopValue;
+          return Math.min(graphTopValue, Math.max(0, value));
+        });
+        const firstMonth = monthRows[0]?.label || 'first month';
+        const lastMonth = monthRows[monthRows.length - 1]?.label || 'last month';
 
         selectedBars.forEach((bar, index) => {
           if (!monthRows[index]) return;
@@ -1471,7 +1795,7 @@
         const tiltText = Math.abs(analysis.degrees) >= 0.25
           ? ` Straightened ${analysis.degrees > 0 ? '+' : ''}${analysis.degrees.toFixed(1)} degrees.`
           : '';
-        photoStatus.textContent = `Estimated ${selectedBars.length} daily-average values from the photo.${tiltText} If the bill's top y-axis number is not ${graphTopValue}, update it and tap Estimate from Photo again.`;
+        photoStatus.textContent = `Estimated ${selectedBars.length} daily-average values from the calibrated photo and mapped them to ${firstMonth} through ${lastMonth}.${tiltText} If values look off, align the Top and 0 guide lines to the photo and estimate again.`;
         const inputPanel = document.querySelector('.panel:nth-of-type(3)');
         if (inputPanel) inputPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
       } catch (error) {
@@ -1530,6 +1854,8 @@
     }
 
     setupMobileAppHints();
+    updateTiltGuide();
+    updateCalibrationGuides();
     initMonthSelect();
     setInitialBillDate();
     buildRollingMonths();
@@ -1540,10 +1866,12 @@
     document.getElementById('cameraInput').addEventListener('change', (event) => handleImage(event.target.files[0]));
     document.getElementById('uploadInput').addEventListener('change', (event) => handleImage(event.target.files[0]));
     estimatePhotoBtn.addEventListener('click', estimateFromPhoto);
-    tiltCorrectionInput.addEventListener('input', () => {
-      const value = Number(tiltCorrectionInput.value) || 0;
-      tiltValueEl.textContent = Math.abs(value) < 0.25 ? 'Auto' : `${value > 0 ? '+' : ''}${value.toFixed(1)}°`;
-    });
+    importAiValuesBtn.addEventListener('click', importAiValues);
+    tiltCorrectionInput.addEventListener('input', updateTiltGuide);
+    topGuidePositionInput.addEventListener('input', updateCalibrationGuides);
+    zeroGuidePositionInput.addEventListener('input', updateCalibrationGuides);
+    firstBarPositionInput.addEventListener('input', updateCalibrationGuides);
+    lastBarPositionInput.addEventListener('input', updateCalibrationGuides);
     document.getElementById('exportPngBtn').addEventListener('click', exportPng);
     document.getElementById('exportPdfBtn').addEventListener('click', exportPdf);
   </script>
