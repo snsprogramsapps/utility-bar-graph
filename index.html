@@ -243,6 +243,31 @@
       margin-top: 12px;
     }
 
+    .tilt-control {
+      margin-top: 12px;
+    }
+
+    .tilt-control-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+    }
+
+    input[type="range"] {
+      accent-color: var(--blue);
+      min-height: 34px;
+      padding: 0;
+    }
+
+    .tilt-value {
+      min-width: 54px;
+      color: var(--muted);
+      font-weight: 700;
+      text-align: right;
+      font-size: 0.9rem;
+    }
+
     .photo-status {
       margin-top: 10px;
       color: var(--muted);
@@ -724,6 +749,14 @@
             </div>
             <button id="estimatePhotoBtn" type="button" class="secondary" disabled>Estimate from Photo</button>
           </div>
+          <div class="tilt-control">
+            <label for="tiltCorrection">Photo tilt correction</label>
+            <div class="tilt-control-row">
+              <input id="tiltCorrection" type="range" min="-8" max="8" step="0.5" value="0">
+              <span class="tilt-value" id="tiltValue">Auto</span>
+            </div>
+            <p class="helper">Keep the graph as flat as possible. If the photo is angled, adjust this slider and tap Estimate from Photo again.</p>
+          </div>
           <div class="photo-status" id="photoStatus" aria-live="polite"></div>
           <p class="helper">Version 1 uses the photo as a reference while you enter the daily-average kWh values manually.</p>
         </div>
@@ -824,6 +857,8 @@
     const photoStatus = document.getElementById('photoStatus');
     const estimatePhotoBtn = document.getElementById('estimatePhotoBtn');
     const graphTopValueInput = document.getElementById('graphTopValue');
+    const tiltCorrectionInput = document.getElementById('tiltCorrection');
+    const tiltValueEl = document.getElementById('tiltValue');
     const iosInstallTip = document.getElementById('iosInstallTip');
 
     let monthRows = [];
@@ -1200,7 +1235,94 @@
         left: baselineRun.start,
         right: baselineRun.end,
         baseline,
-        top: axisTop
+        top: axisTop,
+        score: baselineRun.length
+      };
+    }
+
+    function makeImageCanvas(image, maxWidth = 1200) {
+      const canvas = document.createElement('canvas');
+      const scale = Math.min(1, maxWidth / image.naturalWidth);
+      canvas.width = Math.round(image.naturalWidth * scale);
+      canvas.height = Math.round(image.naturalHeight * scale);
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+      return canvas;
+    }
+
+    function rotateCanvas(sourceCanvas, degrees) {
+      if (Math.abs(degrees) < 0.01) return sourceCanvas;
+
+      const radians = degrees * Math.PI / 180;
+      const sin = Math.abs(Math.sin(radians));
+      const cos = Math.abs(Math.cos(radians));
+      const width = sourceCanvas.width;
+      const height = sourceCanvas.height;
+      const rotated = document.createElement('canvas');
+      rotated.width = Math.ceil(width * cos + height * sin);
+      rotated.height = Math.ceil(width * sin + height * cos);
+      const ctx = rotated.getContext('2d', { willReadFrequently: true });
+
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, rotated.width, rotated.height);
+      ctx.translate(rotated.width / 2, rotated.height / 2);
+      ctx.rotate(radians);
+      ctx.drawImage(sourceCanvas, -width / 2, -height / 2);
+
+      return rotated;
+    }
+
+    function readCanvasPixels(canvas) {
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      return ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+    }
+
+    function scoreGraphAngle(sourceCanvas, degrees) {
+      const canvas = rotateCanvas(sourceCanvas, degrees);
+      const pixels = readCanvasPixels(canvas);
+      const frame = findGraphFrame(pixels, canvas.width, canvas.height);
+      if (!frame) return { score: 0, canvas, pixels, frame: null, degrees };
+
+      const plotHeight = frame.baseline - frame.top;
+      const plotWidth = frame.right - frame.left;
+      return {
+        score: frame.score + plotWidth * 0.25 + plotHeight * 0.35,
+        canvas,
+        pixels,
+        frame,
+        degrees
+      };
+    }
+
+    function prepareAnalysisImage(image) {
+      const baseCanvas = makeImageCanvas(image);
+      const manualDegrees = Number(tiltCorrectionInput.value) || 0;
+      const manualMode = Math.abs(manualDegrees) >= 0.25;
+
+      if (manualMode) {
+        const scored = scoreGraphAngle(baseCanvas, manualDegrees);
+        return {
+          canvas: scored.canvas,
+          pixels: scored.pixels,
+          degrees: manualDegrees,
+          mode: 'manual'
+        };
+      }
+
+      let best = scoreGraphAngle(baseCanvas, 0);
+      for (let degrees = -7; degrees <= 7; degrees += 1) {
+        if (degrees === 0) continue;
+        const scored = scoreGraphAngle(baseCanvas, degrees);
+        if (scored.score > best.score) best = scored;
+      }
+
+      return {
+        canvas: best.canvas,
+        pixels: best.pixels,
+        degrees: best.degrees,
+        mode: 'auto'
       };
     }
 
@@ -1320,16 +1442,8 @@
         const topValue = Number(graphTopValueInput.value);
         const graphTopValue = Number.isFinite(topValue) && topValue > 0 ? topValue : 39;
         const image = await loadImage(uploadedImageDataUrl);
-        const canvas = document.createElement('canvas');
-        const maxWidth = 1200;
-        const scale = Math.min(1, maxWidth / image.naturalWidth);
-        canvas.width = Math.round(image.naturalWidth * scale);
-        canvas.height = Math.round(image.naturalHeight * scale);
-        const ctx = canvas.getContext('2d', { willReadFrequently: true });
-        ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
-
-        const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-        const result = findBillGraphBars(pixels, canvas.width, canvas.height);
+        const analysis = prepareAnalysisImage(image);
+        const result = findBillGraphBars(analysis.pixels, analysis.canvas.width, analysis.canvas.height);
         const bars = result.bars;
 
         if (!result.frame || bars.length < 6) {
@@ -1354,7 +1468,10 @@
 
         renderTable();
         calculateAndRender();
-        photoStatus.textContent = `Estimated ${selectedBars.length} daily-average values from the photo. If the bill's top y-axis number is not ${graphTopValue}, update it and tap Estimate from Photo again.`;
+        const tiltText = Math.abs(analysis.degrees) >= 0.25
+          ? ` Straightened ${analysis.degrees > 0 ? '+' : ''}${analysis.degrees.toFixed(1)} degrees.`
+          : '';
+        photoStatus.textContent = `Estimated ${selectedBars.length} daily-average values from the photo.${tiltText} If the bill's top y-axis number is not ${graphTopValue}, update it and tap Estimate from Photo again.`;
         const inputPanel = document.querySelector('.panel:nth-of-type(3)');
         if (inputPanel) inputPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
       } catch (error) {
@@ -1423,6 +1540,10 @@
     document.getElementById('cameraInput').addEventListener('change', (event) => handleImage(event.target.files[0]));
     document.getElementById('uploadInput').addEventListener('change', (event) => handleImage(event.target.files[0]));
     estimatePhotoBtn.addEventListener('click', estimateFromPhoto);
+    tiltCorrectionInput.addEventListener('input', () => {
+      const value = Number(tiltCorrectionInput.value) || 0;
+      tiltValueEl.textContent = Math.abs(value) < 0.25 ? 'Auto' : `${value > 0 ? '+' : ''}${value.toFixed(1)}°`;
+    });
     document.getElementById('exportPngBtn').addEventListener('click', exportPng);
     document.getElementById('exportPdfBtn').addEventListener('click', exportPdf);
   </script>
