@@ -1,0 +1,1425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#13588f">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Project Bar Graph">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="format-detection" content="telephone=no">
+  <link rel="manifest" href="./manifest.json">
+  <title>Project Bar Graph</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    :root {
+      --bg: #f4f6f8;
+      --panel: #ffffff;
+      --ink: #1f2933;
+      --muted: #657482;
+      --line: #d8dee6;
+      --soft: #eef2f6;
+      --bar: #8e959d;
+      --blue: #1c75bc;
+      --blue-dark: #13588f;
+      --danger: #b42318;
+      --ok: #167c4b;
+      --shadow: 0 10px 28px rgba(31, 41, 51, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      min-height: 100%;
+      -webkit-text-size-adjust: 100%;
+      text-size-adjust: 100%;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+      min-height: 100vh;
+      min-height: 100dvh;
+      overscroll-behavior-y: none;
+      -webkit-tap-highlight-color: rgba(28, 117, 188, 0.18);
+    }
+
+    header {
+      background: #ffffff;
+      border-bottom: 1px solid var(--line);
+      padding: calc(18px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) 18px calc(16px + env(safe-area-inset-left));
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .header-inner {
+      max-width: 1180px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 1.55rem;
+      line-height: 1.15;
+      letter-spacing: 0;
+    }
+
+    .header-note {
+      color: var(--muted);
+      font-size: 0.94rem;
+      text-align: right;
+    }
+
+    main {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 18px calc(14px + env(safe-area-inset-right)) calc(34px + env(safe-area-inset-bottom)) calc(14px + env(safe-area-inset-left));
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 390px minmax(0, 1fr);
+      gap: 18px;
+      align-items: start;
+    }
+
+    .panel,
+    .summary-card,
+    .chart-shell {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+    }
+
+    .panel {
+      padding: 16px;
+    }
+
+    .panel + .panel {
+      margin-top: 16px;
+    }
+
+    h2 {
+      margin: 0 0 12px;
+      font-size: 1.02rem;
+      line-height: 1.25;
+    }
+
+    label {
+      display: block;
+      font-weight: 700;
+      font-size: 0.86rem;
+      margin-bottom: 7px;
+    }
+
+    input,
+    select {
+      width: 100%;
+      border: 1px solid #bac4cf;
+      border-radius: 6px;
+      color: var(--ink);
+      background: #ffffff;
+      min-height: 42px;
+      padding: 9px 10px;
+      font-size: 16px;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+
+    input:focus,
+    select:focus {
+      outline: 3px solid rgba(28, 117, 188, 0.18);
+      border-color: var(--blue);
+    }
+
+    .bill-controls {
+      display: grid;
+      grid-template-columns: 1fr 0.85fr;
+      gap: 12px;
+    }
+
+    .photo-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 8px;
+    }
+
+    .file-action {
+      position: relative;
+      overflow: hidden;
+      min-height: 46px;
+    }
+
+    .file-action input {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+    }
+
+    button,
+    .file-button {
+      border: 1px solid var(--blue);
+      background: var(--blue);
+      color: #ffffff;
+      min-height: 44px;
+      border-radius: 6px;
+      padding: 10px 13px;
+      font-weight: 700;
+      font-size: 0.94rem;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      width: 100%;
+      touch-action: manipulation;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    button:hover,
+    .file-action:hover .file-button {
+      background: var(--blue-dark);
+      border-color: var(--blue-dark);
+    }
+
+    .secondary {
+      color: var(--blue);
+      background: #ffffff;
+    }
+
+    .secondary:hover {
+      color: #ffffff;
+    }
+
+    .preview-wrap {
+      margin-top: 14px;
+      border: 1px dashed #aeb8c3;
+      border-radius: 8px;
+      min-height: 160px;
+      background: #f9fbfc;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    .preview-wrap img {
+      width: 100%;
+      max-height: 360px;
+      object-fit: contain;
+      display: none;
+      background: #ffffff;
+    }
+
+    .preview-empty {
+      color: var(--muted);
+      padding: 20px;
+      text-align: center;
+      font-size: 0.95rem;
+      line-height: 1.4;
+    }
+
+    .photo-tools {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      align-items: end;
+      margin-top: 12px;
+    }
+
+    .photo-status {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 0.9rem;
+      line-height: 1.35;
+      min-height: 20px;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 520px;
+      background: #ffffff;
+    }
+
+    th,
+    td {
+      border-bottom: 1px solid var(--line);
+      padding: 9px 8px;
+      text-align: left;
+      vertical-align: middle;
+      font-size: 0.92rem;
+    }
+
+    th {
+      background: var(--soft);
+      font-size: 0.78rem;
+      color: #3b4652;
+      text-transform: uppercase;
+      letter-spacing: 0;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    td input {
+      min-height: 38px;
+      padding: 7px 8px;
+      font-size: 0.95rem;
+    }
+
+    .days-input {
+      max-width: 74px;
+    }
+
+    .kwh-output {
+      font-weight: 700;
+      color: #26313d;
+      white-space: nowrap;
+    }
+
+    .validation {
+      display: none;
+      margin-top: 10px;
+      color: var(--danger);
+      font-size: 0.9rem;
+      line-height: 1.35;
+    }
+
+    .validation.show {
+      display: block;
+    }
+
+    .helper {
+      color: var(--muted);
+      font-size: 0.9rem;
+      line-height: 1.4;
+      margin: 10px 0 0;
+    }
+
+    .chart-shell {
+      padding: 18px;
+    }
+
+    #reportArea {
+      background: #ffffff;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 0 18px 18px;
+      overflow: hidden;
+    }
+
+    .report-rule {
+      height: 4px;
+      background: var(--blue-dark);
+      margin: 0 -18px 18px;
+    }
+
+    .report-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 300px;
+      gap: 22px;
+      align-items: stretch;
+    }
+
+    .chart-header {
+      margin-bottom: 18px;
+    }
+
+    .chart-title {
+      margin: 0;
+      font-size: clamp(1.45rem, 4vw, 2.25rem);
+      line-height: 1.1;
+      letter-spacing: 0;
+    }
+
+    .report-meta {
+      display: grid;
+      grid-template-columns: auto auto minmax(0, 1fr);
+      gap: 18px;
+      margin: 18px 0 22px;
+      font-size: 0.98rem;
+      line-height: 1.3;
+    }
+
+    .report-meta strong {
+      color: var(--blue-dark);
+    }
+
+    .chart-subtitle {
+      margin: 0 0 14px;
+      color: #000000;
+      font-weight: 800;
+      font-size: 1.08rem;
+    }
+
+    .chart-box {
+      height: 470px;
+      min-height: 320px;
+      position: relative;
+    }
+
+    .summary-card {
+      border: 0;
+      border-left: 1px solid #222222;
+      border-radius: 0;
+      box-shadow: none;
+      padding: 22px 0 0 22px;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      gap: 18px;
+    }
+
+    .summary-label {
+      color: #000000;
+      font-size: 1.18rem;
+      font-weight: 700;
+      letter-spacing: 0;
+      margin-bottom: 12px;
+      text-align: center;
+      line-height: 1.35;
+    }
+
+    .summary-total {
+      font-size: clamp(2.2rem, 7vw, 3.1rem);
+      line-height: 0.98;
+      font-weight: 800;
+      color: var(--blue-dark);
+      letter-spacing: 0;
+      text-align: center;
+    }
+
+    .summary-unit {
+      color: var(--blue-dark);
+      font-weight: 700;
+      margin-top: 4px;
+      text-align: center;
+      font-size: 1.35rem;
+    }
+
+    .summary-main {
+      text-align: center;
+      font-size: 1rem;
+      line-height: 1.35;
+    }
+
+    #summaryDateRange {
+      margin-bottom: 26px;
+    }
+
+    .current-usage {
+      margin-top: 18px;
+      color: #333333;
+      font-size: 0.95rem;
+    }
+
+    .current-usage strong {
+      display: block;
+      color: #111111;
+      margin-bottom: 3px;
+    }
+
+    .summary-row {
+      border-top: 1px solid #222222;
+      padding-top: 18px;
+      font-size: 1rem;
+      line-height: 1.42;
+    }
+
+    .summary-row strong {
+      display: block;
+      margin-bottom: 10px;
+      font-size: 1.04rem;
+    }
+
+    .calculation-box {
+      background: #f0f0f0;
+      border-radius: 4px;
+      padding: 14px;
+      font-size: 0.95rem;
+      line-height: 1.45;
+    }
+
+    .calculation-box strong {
+      display: block;
+      margin-bottom: 8px;
+    }
+
+    .calculation-total {
+      color: var(--blue-dark);
+      font-weight: 800;
+    }
+
+    .report-note {
+      margin: 18px 0 0;
+      color: #111111;
+      font-size: 0.93rem;
+      line-height: 1.35;
+    }
+
+    .exports {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .status {
+      margin-top: 10px;
+      color: var(--ok);
+      font-size: 0.9rem;
+      min-height: 20px;
+    }
+
+    .wide-action {
+      margin-top: 12px;
+    }
+
+    .ios-install-tip {
+      display: none;
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 10px calc(14px + env(safe-area-inset-right)) 0 calc(14px + env(safe-area-inset-left));
+    }
+
+    .ios-install-tip.show {
+      display: block;
+    }
+
+    .ios-install-tip-inner {
+      background: #eaf4fc;
+      border: 1px solid #b9d8ef;
+      border-radius: 8px;
+      color: #17384f;
+      font-size: 0.92rem;
+      line-height: 1.35;
+      padding: 10px 12px;
+    }
+
+    @media (max-width: 940px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      .report-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .summary-card {
+        border-left: 0;
+        border-top: 1px solid #222222;
+        padding: 18px 0 0;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .summary-main {
+        grid-row: span 2;
+      }
+    }
+
+    @media (max-width: 620px) {
+      header {
+        position: static;
+      }
+
+      .header-inner,
+      .bill-controls,
+      .photo-actions,
+      .photo-tools,
+      .exports,
+      .summary-card {
+        grid-template-columns: 1fr;
+        display: grid;
+      }
+
+      .header-note {
+        text-align: left;
+      }
+
+      main {
+        padding: 12px 10px 24px;
+      }
+
+      .panel,
+      .chart-shell {
+        padding: 12px;
+      }
+
+      #reportArea {
+        padding: 0 10px 12px;
+      }
+
+      .report-rule {
+        margin: 0 -10px 14px;
+      }
+
+      .chart-title {
+        font-size: 1.72rem;
+      }
+
+      .chart-subtitle {
+        font-size: 1rem;
+      }
+
+      .chart-box {
+        height: 420px;
+        min-height: 420px;
+      }
+
+      .report-meta {
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+
+      .summary-card {
+        border-top: 1px solid #222222;
+        padding-top: 16px;
+      }
+
+      .summary-total {
+        font-size: 2.55rem;
+      }
+    }
+
+    @media (max-width: 430px) {
+      .header-inner {
+        align-items: flex-start;
+        gap: 6px;
+      }
+
+      h1 {
+        font-size: 1.42rem;
+      }
+
+      main {
+        padding: 10px calc(8px + env(safe-area-inset-right)) calc(22px + env(safe-area-inset-bottom)) calc(8px + env(safe-area-inset-left));
+      }
+
+      .panel,
+      .chart-shell {
+        border-radius: 7px;
+      }
+
+      .table-wrap {
+        max-height: 560px;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      th,
+      td {
+        padding: 8px 6px;
+      }
+
+      td input {
+        font-size: 16px;
+      }
+
+      .chart-shell {
+        margin-left: -2px;
+        margin-right: -2px;
+      }
+
+      .report-grid {
+        gap: 14px;
+      }
+
+      .chart-box {
+        height: 390px;
+        min-height: 390px;
+      }
+
+      .calculation-box {
+        overflow-wrap: anywhere;
+      }
+
+      .exports {
+        position: sticky;
+        bottom: env(safe-area-inset-bottom);
+        z-index: 8;
+        background: rgba(244, 246, 248, 0.94);
+        padding: 8px 0;
+        backdrop-filter: blur(8px);
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-inner">
+      <h1>Project Bar Graph</h1>
+      <div class="header-note">Manual bill graph entry for field consultations</div>
+    </div>
+  </header>
+
+  <div class="ios-install-tip" id="iosInstallTip">
+    <div class="ios-install-tip-inner">
+      For iPhone field use: open this page in Safari, tap Share, then Add to Home Screen.
+    </div>
+  </div>
+
+  <main>
+    <div class="layout">
+      <section>
+        <div class="panel">
+          <h2>Bill Month</h2>
+          <div class="bill-controls">
+            <div>
+              <label for="currentMonth">Current bill month</label>
+              <select id="currentMonth"></select>
+            </div>
+            <div>
+              <label for="currentYear">Current bill year</label>
+              <input id="currentYear" type="number" inputmode="numeric" min="2000" max="2100" step="1">
+            </div>
+          </div>
+          <button class="wide-action" id="generateMonthsBtn" type="button">Auto-calculate 13 months</button>
+          <p class="helper">The chart starts 12 months before the current bill month and runs through the selected current bill month.</p>
+        </div>
+
+        <div class="panel">
+          <h2>Photo Capture / Upload</h2>
+          <div class="photo-actions">
+            <label class="file-action" aria-label="Take bill photo">
+              <span class="file-button">Take Bill Photo</span>
+              <input id="cameraInput" type="file" accept="image/*" capture="environment">
+            </label>
+            <label class="file-action" aria-label="Upload photo">
+              <span class="file-button secondary">Upload Photo</span>
+              <input id="uploadInput" type="file" accept="image/*">
+            </label>
+          </div>
+          <div class="preview-wrap">
+            <img id="imagePreview" alt="Uploaded bill graph preview">
+            <div class="preview-empty" id="previewEmpty">Bill photo preview will appear here so you can read the graph while entering values.</div>
+          </div>
+          <div class="photo-tools">
+            <div>
+              <label for="graphTopValue">Bill graph top value</label>
+              <input id="graphTopValue" type="number" inputmode="decimal" min="1" step="0.1" value="39">
+            </div>
+            <button id="estimatePhotoBtn" type="button" class="secondary" disabled>Estimate from Photo</button>
+          </div>
+          <div class="photo-status" id="photoStatus" aria-live="polite"></div>
+          <p class="helper">Version 1 uses the photo as a reference while you enter the daily-average kWh values manually.</p>
+        </div>
+
+        <div class="panel">
+          <h2>Month Input Table</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Month</th>
+                  <th>Days</th>
+                  <th>Daily Avg kWh</th>
+                  <th>Monthly kWh</th>
+                </tr>
+              </thead>
+              <tbody id="monthTableBody"></tbody>
+            </table>
+          </div>
+          <button class="wide-action" id="calculateBtn" type="button">Auto-calculate</button>
+          <div class="validation" id="validationBox"></div>
+        </div>
+      </section>
+
+      <section class="chart-shell">
+        <div id="reportArea">
+          <div class="report-rule"></div>
+          <div class="report-grid">
+            <div>
+              <div class="chart-header">
+                <h2 class="chart-title">Your electricity usage by month (kWh)</h2>
+                <div class="report-meta">
+                  <span>2 Years ago: N/A</span>
+                  <span>Last year: N/A</span>
+                  <strong id="thisYearLine">This year: 0 kWh</strong>
+                </div>
+                <p class="chart-subtitle">Total electricity you used each month (kWh)</p>
+              </div>
+              <div class="chart-box">
+                <canvas id="usageChart"></canvas>
+              </div>
+              <p class="report-note">Note: Monthly totals are estimated from daily-average kWh values. The number of days in each month is shown below the month.</p>
+            </div>
+            <aside class="summary-card">
+              <div class="summary-main">
+                <div class="summary-label">Total electricity used this year</div>
+                <div id="summaryDateRange">-</div>
+                <div class="summary-total" id="totalKwh">0</div>
+                <div class="summary-unit">kWh</div>
+                <div class="current-usage">
+                  <strong>Current bill usage</strong>
+                  <span id="currentBillUsage">0 kWh</span>
+                </div>
+              </div>
+              <div class="summary-row">
+                <strong>How we calculate it</strong>
+                <span>We add up your total electricity usage (kWh) for each month in this 12-month period.</span>
+                <br><br>
+                <span>This helps you see your total usage by month and compare your usage over time.</span>
+              </div>
+              <div class="calculation-box">
+                <strong>Calculation</strong>
+                <span id="calculationText">0 = 0 kWh</span>
+              </div>
+            </aside>
+          </div>
+        </div>
+        <div class="exports">
+          <button id="exportPngBtn" type="button">Export PNG</button>
+          <button id="exportPdfBtn" type="button" class="secondary">Export PDF</button>
+        </div>
+        <div class="status" id="exportStatus" aria-live="polite"></div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const monthNames = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    const monthShort = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+    const currentMonthSelect = document.getElementById('currentMonth');
+    const currentYearInput = document.getElementById('currentYear');
+    const generateMonthsBtn = document.getElementById('generateMonthsBtn');
+    const calculateBtn = document.getElementById('calculateBtn');
+    const tableBody = document.getElementById('monthTableBody');
+    const validationBox = document.getElementById('validationBox');
+    const totalKwhEl = document.getElementById('totalKwh');
+    const summaryDateRangeEl = document.getElementById('summaryDateRange');
+    const thisYearLineEl = document.getElementById('thisYearLine');
+    const calculationTextEl = document.getElementById('calculationText');
+    const currentBillUsageEl = document.getElementById('currentBillUsage');
+    const exportStatus = document.getElementById('exportStatus');
+    const imagePreview = document.getElementById('imagePreview');
+    const previewEmpty = document.getElementById('previewEmpty');
+    const photoStatus = document.getElementById('photoStatus');
+    const estimatePhotoBtn = document.getElementById('estimatePhotoBtn');
+    const graphTopValueInput = document.getElementById('graphTopValue');
+    const iosInstallTip = document.getElementById('iosInstallTip');
+
+    let monthRows = [];
+    let usageChart;
+    let uploadedImageDataUrl = '';
+
+    Chart.register(ChartDataLabels);
+
+    function setupMobileAppHints() {
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      const isStandalone = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
+      if (isIOS && !isStandalone) {
+        iosInstallTip.classList.add('show');
+      }
+
+      if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
+        navigator.serviceWorker.register('./service-worker.js').catch(() => {
+          // Service worker support is optional; the app still works without offline caching.
+        });
+      }
+    }
+
+    function initMonthSelect() {
+      monthNames.forEach((name, index) => {
+        const option = document.createElement('option');
+        option.value = String(index);
+        option.textContent = name;
+        currentMonthSelect.appendChild(option);
+      });
+    }
+
+    function daysInMonth(year, monthIndex) {
+      return new Date(year, monthIndex + 1, 0).getDate();
+    }
+
+    function makeMonthLabel(year, monthIndex) {
+      return `${monthShort[monthIndex]} '${String(year).slice(-2)}`;
+    }
+
+    function buildRollingMonths() {
+      const selectedMonth = Number(currentMonthSelect.value);
+      const selectedYear = Number(currentYearInput.value);
+      const safeYear = Number.isFinite(selectedYear) && selectedYear >= 2000 && selectedYear <= 2100
+        ? selectedYear
+        : new Date().getFullYear();
+
+      monthRows = [];
+      for (let offset = -12; offset <= 0; offset += 1) {
+        const date = new Date(safeYear, selectedMonth + offset, 1);
+        const year = date.getFullYear();
+        const monthIndex = date.getMonth();
+        monthRows.push({
+          year,
+          monthIndex,
+          label: makeMonthLabel(year, monthIndex),
+          days: daysInMonth(year, monthIndex),
+          dailyAverage: 0,
+          monthlyKwh: 0
+        });
+      }
+
+      renderTable();
+      calculateAndRender();
+    }
+
+    function renderTable() {
+      tableBody.innerHTML = '';
+      monthRows.forEach((row, index) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><strong>${row.label}</strong></td>
+          <td>
+            <input class="days-input" type="number" inputmode="numeric" min="0" step="1" value="${row.days}" data-index="${index}" data-field="days" aria-label="${row.label} days in month">
+          </td>
+          <td>
+            <input type="number" inputmode="decimal" min="0" step="0.01" value="${row.dailyAverage || ''}" data-index="${index}" data-field="dailyAverage" aria-label="${row.label} daily average kWh">
+          </td>
+          <td class="kwh-output" id="monthly-${index}">${row.monthlyKwh.toLocaleString()} kWh</td>
+        `;
+        tableBody.appendChild(tr);
+      });
+    }
+
+    function parseNumeric(value) {
+      if (value === '') return 0;
+      const number = Number(value);
+      return Number.isFinite(number) ? number : NaN;
+    }
+
+    function readTableValues() {
+      const errors = [];
+      tableBody.querySelectorAll('input').forEach((input) => {
+        const index = Number(input.dataset.index);
+        const field = input.dataset.field;
+        const value = parseNumeric(input.value);
+
+        if (Number.isNaN(value)) {
+          errors.push(`${monthRows[index].label}: ${field === 'days' ? 'Days' : 'Daily average kWh'} must be numeric.`);
+          return;
+        }
+
+        if (value < 0) {
+          errors.push(`${monthRows[index].label}: values cannot be negative.`);
+          return;
+        }
+
+        monthRows[index][field] = field === 'days' ? Math.round(value) : value;
+      });
+      return errors;
+    }
+
+    function calculateRows() {
+      monthRows = monthRows.map((row) => ({
+        ...row,
+        monthlyKwh: Math.round((Number(row.dailyAverage) || 0) * (Number(row.days) || 0))
+      }));
+    }
+
+    function showValidation(errors) {
+      if (!errors.length) {
+        validationBox.classList.remove('show');
+        validationBox.textContent = '';
+        return;
+      }
+      validationBox.classList.add('show');
+      validationBox.textContent = errors.join(' ');
+    }
+
+    function updateMonthlyCells() {
+      monthRows.forEach((row, index) => {
+        const cell = document.getElementById(`monthly-${index}`);
+        if (cell) cell.textContent = `${row.monthlyKwh.toLocaleString()} kWh`;
+      });
+    }
+
+    function updateSummary() {
+      const totalRows = monthRows.slice(-12);
+      const total = totalRows.reduce((sum, row) => sum + row.monthlyKwh, 0);
+      const first = totalRows[0] || monthRows[0];
+      const last = monthRows[monthRows.length - 1];
+      const rangeText = `${first.label} - ${last.label}`;
+      const values = totalRows.map((row) => row.monthlyKwh.toLocaleString());
+
+      totalKwhEl.textContent = total.toLocaleString();
+      summaryDateRangeEl.textContent = `${rangeText} (12 months)`;
+      thisYearLineEl.textContent = `This year (${rangeText}): ${total.toLocaleString()} kWh`;
+      calculationTextEl.innerHTML = `${values.join(' + ')}<br><span class="calculation-total">= ${total.toLocaleString()} kWh</span>`;
+      currentBillUsageEl.textContent = `${last.monthlyKwh.toLocaleString()} kWh`;
+    }
+
+    function getBarColors(values) {
+      const max = Math.max(...values, 0);
+      const maxIndex = values.findIndex((value) => value === max && max > 0);
+      return values.map((_, index) => {
+        if (index === maxIndex) return '#1c75bc';
+        if (index === 0) return '#111111';
+        return '#85878b';
+      });
+    }
+
+    function getYAxisMax(values) {
+      const max = Math.max(...values, 0);
+      if (max <= 0) return 2500;
+      return Math.max(500, Math.ceil((max * 1.15) / 500) * 500);
+    }
+
+    function renderChart() {
+      const labels = monthRows.map((row) => [monthShort[row.monthIndex], `'${String(row.year).slice(-2)}`, `(${row.days})`]);
+      const values = monthRows.map((row) => row.monthlyKwh);
+      const colors = getBarColors(values);
+      const yMax = getYAxisMax(values);
+
+      if (usageChart) {
+        usageChart.data.labels = labels;
+        usageChart.data.datasets[0].data = values;
+        usageChart.data.datasets[0].backgroundColor = colors;
+        usageChart.options.scales.y.suggestedMax = yMax;
+        usageChart.update();
+        return;
+      }
+
+      usageChart = new Chart(document.getElementById('usageChart'), {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{
+            data: values,
+            backgroundColor: colors,
+            borderRadius: 3,
+            borderSkipped: false,
+            barPercentage: 0.58,
+            categoryPercentage: 0.82
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: false,
+          layout: {
+            padding: { top: 28, right: 12, bottom: 8, left: 0 }
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: (context) => `${context.parsed.y.toLocaleString()} kWh`
+              }
+            },
+            datalabels: {
+              anchor: 'end',
+              align: 'top',
+              color: '#26313d',
+              font: { weight: '800', size: 13 },
+              formatter: (value) => value > 0 ? value.toLocaleString() : ''
+            }
+          },
+          scales: {
+            x: {
+              grid: { display: false },
+              ticks: {
+                color: '#111111',
+                maxRotation: 0,
+                minRotation: 0,
+                font: { size: 12, weight: '500' }
+              }
+            },
+            y: {
+              beginAtZero: true,
+              suggestedMax: yMax,
+              grid: { color: '#d7d7d7' },
+              border: { display: true, color: '#222222' },
+              title: {
+                display: true,
+                text: 'kWh',
+                align: 'end',
+                color: '#111111',
+                font: { size: 13, weight: '500' }
+              },
+              ticks: {
+                color: '#111111',
+                font: { size: 12 },
+                callback: (value) => Number(value).toLocaleString()
+              }
+            }
+          }
+        }
+      });
+    }
+
+    function calculateAndRender() {
+      const errors = readTableValues();
+      showValidation(errors);
+      if (errors.length) return;
+
+      calculateRows();
+      updateMonthlyCells();
+      updateSummary();
+      renderChart();
+    }
+
+    function handleImage(file) {
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        uploadedImageDataUrl = event.target.result;
+        imagePreview.src = uploadedImageDataUrl;
+        imagePreview.style.display = 'block';
+        previewEmpty.style.display = 'none';
+        estimatePhotoBtn.disabled = false;
+        photoStatus.textContent = 'Photo loaded. Estimating daily-average values now...';
+        window.setTimeout(estimateFromPhoto, 80);
+
+        // Future OCR/image recognition hook:
+        // Analyze the uploaded SCE bill graph image here to detect bar heights
+        // and prefill dailyAverage values before the consultant reviews them.
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function loadImage(src) {
+      return new Promise((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = reject;
+        image.src = src;
+      });
+    }
+
+    function median(values) {
+      const sorted = [...values].sort((a, b) => a - b);
+      const middle = Math.floor(sorted.length / 2);
+      return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+    }
+
+    function percentile(values, amount) {
+      if (!values.length) return 0;
+      const sorted = [...values].sort((a, b) => a - b);
+      const index = Math.min(sorted.length - 1, Math.max(0, Math.floor((sorted.length - 1) * amount)));
+      return sorted[index];
+    }
+
+    function isDarkNeutralPixel(imageData, width, x, y, maxLightness = 178) {
+      const i = (y * width + x) * 4;
+      const r = imageData[i];
+      const g = imageData[i + 1];
+      const b = imageData[i + 2];
+      const max = Math.max(r, g, b);
+      const min = Math.min(r, g, b);
+      return max < maxLightness && max - min < 58;
+    }
+
+    function darkRunOnRow(imageData, width, y, xStart, xEnd) {
+      let best = { start: xStart, end: xStart, length: 0 };
+      let current = null;
+
+      for (let x = xStart; x <= xEnd; x += 1) {
+        if (isDarkNeutralPixel(imageData, width, x, y, 150)) {
+          if (!current) current = { start: x, end: x };
+          current.end = x;
+          continue;
+        }
+
+        if (current) {
+          const length = current.end - current.start + 1;
+          if (length > best.length) best = { ...current, length };
+          current = null;
+        }
+      }
+
+      if (current) {
+        const length = current.end - current.start + 1;
+        if (length > best.length) best = { ...current, length };
+      }
+
+      return best;
+    }
+
+    function findGraphFrame(imageData, width, height) {
+      const xStart = Math.floor(width * 0.06);
+      const xEnd = Math.floor(width * 0.96);
+      const yStart = Math.floor(height * 0.42);
+      const yEnd = Math.floor(height * 0.9);
+      let baseline = null;
+      let baselineRun = null;
+
+      for (let y = yStart; y <= yEnd; y += 1) {
+        const run = darkRunOnRow(imageData, width, y, xStart, xEnd);
+        if (!baselineRun || run.length > baselineRun.length) {
+          baseline = y;
+          baselineRun = run;
+        }
+      }
+
+      if (!baselineRun || baselineRun.length < width * 0.25) {
+        return null;
+      }
+
+      let axisTop = baseline;
+      const axisSearchLeft = Math.max(0, baselineRun.start - 4);
+      const axisSearchRight = Math.min(width - 1, baselineRun.start + 8);
+      for (let y = baseline - 1; y >= Math.floor(height * 0.2); y -= 1) {
+        let hits = 0;
+        for (let x = axisSearchLeft; x <= axisSearchRight; x += 1) {
+          if (isDarkNeutralPixel(imageData, width, x, y, 165)) hits += 1;
+        }
+        if (hits > 0) axisTop = y;
+      }
+
+      if (baseline - axisTop < height * 0.16) {
+        axisTop = Math.floor(height * 0.36);
+      }
+
+      return {
+        left: baselineRun.start,
+        right: baselineRun.end,
+        baseline,
+        top: axisTop
+      };
+    }
+
+    function columnBarHeight(imageData, width, x, top, baseline) {
+      let height = 0;
+      let gap = 0;
+      let started = false;
+
+      for (let y = baseline - 1; y >= top; y -= 1) {
+        if (isDarkNeutralPixel(imageData, width, x, y, 188)) {
+          height += 1;
+          gap = 0;
+          started = true;
+          continue;
+        }
+
+        if (started) {
+          gap += 1;
+          if (gap > 3) break;
+        }
+      }
+
+      return height;
+    }
+
+    function sampleThirteenBars(imageData, width, frame, columnHeights) {
+      const plotWidth = frame.right - frame.left;
+      const leftPad = plotWidth * 0.055;
+      const rightPad = plotWidth * 0.04;
+      const step = (plotWidth - leftPad - rightPad) / 12;
+      const bars = [];
+
+      for (let index = 0; index < 13; index += 1) {
+        const center = frame.left + leftPad + step * index;
+        const halfWindow = Math.max(3, Math.round(step * 0.16));
+        const heights = [];
+        for (let x = Math.max(frame.left, Math.round(center - halfWindow)); x <= Math.min(frame.right, Math.round(center + halfWindow)); x += 1) {
+          heights.push(columnHeights.get(x) || columnBarHeight(imageData, width, x, frame.top, frame.baseline));
+        }
+        const barHeight = percentile(heights, 0.86);
+        bars.push({
+          center,
+          top: frame.baseline - barHeight,
+          bottom: frame.baseline,
+          height: barHeight,
+          width: halfWindow * 2
+        });
+      }
+
+      return bars;
+    }
+
+    function findBillGraphBars(imageData, width, height) {
+      const frame = findGraphFrame(imageData, width, height);
+      if (!frame) return { bars: [], frame: null, method: 'none' };
+
+      const minHeight = Math.max(6, Math.round((frame.baseline - frame.top) * 0.04));
+      const columnHeights = new Map();
+      const groups = [];
+      let current = null;
+
+      for (let x = frame.left + 2; x <= frame.right - 2; x += 1) {
+        const heightAtX = columnBarHeight(imageData, width, x, frame.top, frame.baseline);
+        columnHeights.set(x, heightAtX);
+
+        if (heightAtX >= minHeight) {
+          if (!current) current = { start: x, end: x, heights: [] };
+          current.end = x;
+          current.heights.push(heightAtX);
+          continue;
+        }
+
+        if (current) {
+          groups.push(current);
+          current = null;
+        }
+      }
+
+      if (current) groups.push(current);
+
+      const plotWidth = frame.right - frame.left;
+      const candidates = groups
+        .map((group) => {
+          const barHeight = percentile(group.heights, 0.88);
+          return {
+            start: group.start,
+            end: group.end,
+            center: (group.start + group.end) / 2,
+            width: group.end - group.start + 1,
+            top: frame.baseline - barHeight,
+            bottom: frame.baseline,
+            height: barHeight
+          };
+        })
+        .filter((group) => group.width >= Math.max(3, plotWidth * 0.008) && group.width <= plotWidth * 0.08 && group.height >= minHeight)
+        .sort((a, b) => a.center - b.center);
+
+      if (candidates.length === 13) {
+        return { bars: candidates, frame, method: 'detected' };
+      }
+
+      return {
+        bars: sampleThirteenBars(imageData, width, frame, columnHeights),
+        frame,
+        method: candidates.length ? 'sampled' : 'sampled-fallback'
+      };
+    }
+
+    async function estimateFromPhoto() {
+      if (!uploadedImageDataUrl) {
+        photoStatus.textContent = 'Upload or take a bill photo first.';
+        return;
+      }
+
+      try {
+        photoStatus.textContent = 'Estimating daily averages from the photo...';
+        const topValue = Number(graphTopValueInput.value);
+        const graphTopValue = Number.isFinite(topValue) && topValue > 0 ? topValue : 39;
+        const image = await loadImage(uploadedImageDataUrl);
+        const canvas = document.createElement('canvas');
+        const maxWidth = 1200;
+        const scale = Math.min(1, maxWidth / image.naturalWidth);
+        canvas.width = Math.round(image.naturalWidth * scale);
+        canvas.height = Math.round(image.naturalHeight * scale);
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+        const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+        const result = findBillGraphBars(pixels, canvas.width, canvas.height);
+        const bars = result.bars;
+
+        if (!result.frame || bars.length < 6) {
+          photoStatus.textContent = 'I could not confidently find the bars. You can still type the daily averages from the photo into the table.';
+          return;
+        }
+
+        const selectedBars = bars.length > 13 ? bars.slice(-13) : bars;
+        const bottom = result.frame.baseline;
+        const graphHeight = Math.max(1, bottom - result.frame.top);
+
+        selectedBars.forEach((bar, index) => {
+          if (!monthRows[index]) return;
+          const estimatedDailyAverage = Math.max(0, ((bottom - bar.top) / graphHeight) * graphTopValue);
+          monthRows[index].dailyAverage = Math.round(estimatedDailyAverage * 10) / 10;
+        });
+
+        renderTable();
+        calculateAndRender();
+        photoStatus.textContent = `Estimated ${selectedBars.length} daily-average values from the photo. Please review and adjust them against the bill graph.`;
+        const inputPanel = document.querySelector('.panel:nth-of-type(3)');
+        if (inputPanel) inputPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } catch (error) {
+        photoStatus.textContent = 'The photo loaded, but the estimate could not run. Please enter the daily averages manually from the preview.';
+      }
+    }
+
+    async function exportPng() {
+      calculateAndRender();
+      exportStatus.textContent = 'Preparing PNG...';
+      const canvas = await html2canvas(document.getElementById('reportArea'), {
+        backgroundColor: '#ffffff',
+        scale: 2
+      });
+      const link = document.createElement('a');
+      link.href = canvas.toDataURL('image/png');
+      link.download = 'project-bar-graph.png';
+      link.click();
+      exportStatus.textContent = 'PNG exported.';
+    }
+
+    async function exportPdf() {
+      calculateAndRender();
+      exportStatus.textContent = 'Preparing PDF...';
+      const canvas = await html2canvas(document.getElementById('reportArea'), {
+        backgroundColor: '#ffffff',
+        scale: 2
+      });
+      const imageData = canvas.toDataURL('image/png');
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF({
+        orientation: canvas.width >= canvas.height ? 'landscape' : 'portrait',
+        unit: 'pt',
+        format: 'letter'
+      });
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 28;
+      const usableWidth = pageWidth - margin * 2;
+      const usableHeight = pageHeight - margin * 2;
+      const ratio = Math.min(usableWidth / canvas.width, usableHeight / canvas.height);
+      const width = canvas.width * ratio;
+      const height = canvas.height * ratio;
+      const x = (pageWidth - width) / 2;
+      const y = (pageHeight - height) / 2;
+
+      pdf.addImage(imageData, 'PNG', x, y, width, height);
+      pdf.save('project-bar-graph.pdf');
+      exportStatus.textContent = 'PDF exported.';
+    }
+
+    function setInitialBillDate() {
+      const today = new Date();
+      currentMonthSelect.value = String(today.getMonth());
+      currentYearInput.value = String(today.getFullYear());
+    }
+
+    setupMobileAppHints();
+    initMonthSelect();
+    setInitialBillDate();
+    buildRollingMonths();
+
+    generateMonthsBtn.addEventListener('click', buildRollingMonths);
+    calculateBtn.addEventListener('click', calculateAndRender);
+    tableBody.addEventListener('input', calculateAndRender);
+    document.getElementById('cameraInput').addEventListener('change', (event) => handleImage(event.target.files[0]));
+    document.getElementById('uploadInput').addEventListener('change', (event) => handleImage(event.target.files[0]));
+    estimatePhotoBtn.addEventListener('click', estimateFromPhoto);
+    document.getElementById('exportPngBtn').addEventListener('click', exportPng);
+    document.getElementById('exportPdfBtn').addEventListener('click', exportPdf);
+  </script>
+</body>
+</html>

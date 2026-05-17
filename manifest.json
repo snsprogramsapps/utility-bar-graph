@@ -1,0 +1,20 @@
+{
+  "name": "Project Bar Graph",
+  "short_name": "Bar Graph",
+  "description": "Mobile utility bill graph tool for estimating monthly kWh from SCE bill photos.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f4f6f8",
+  "theme_color": "#13588f",
+  "categories": ["utilities", "productivity"],
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='96' fill='%2313588f'/%3E%3Crect x='108' y='286' width='48' height='118' rx='10' fill='white'/%3E%3Crect x='190' y='226' width='48' height='178' rx='10' fill='white' opacity='.82'/%3E%3Crect x='272' y='144' width='48' height='260' rx='10' fill='white'/%3E%3Crect x='354' y='248' width='48' height='156' rx='10' fill='white' opacity='.82'/%3E%3Cpath d='M96 404h320' stroke='white' stroke-width='22' stroke-linecap='round'/%3E%3C/svg%3E",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
