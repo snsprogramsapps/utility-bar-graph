@@ -860,7 +860,7 @@
           </div>
           <div class="photo-tools">
             <div>
-              <label for="graphTopValue">Bill graph top value (top y-axis number)</label>
+              <label for="graphTopValue">Peak daily average / top y-axis value</label>
               <input id="graphTopValue" type="number" inputmode="decimal" min="1" max="10000" step="1" value="39">
             </div>
             <button id="estimatePhotoBtn" type="button" class="secondary" disabled>Estimate from Photo</button>
@@ -889,7 +889,7 @@
               <label for="lastBarPosition">Last bar center <span class="calibration-value" id="lastBarValue">88%</span></label>
               <input id="lastBarPosition" type="range" min="45" max="96" step="1" value="88">
             </div>
-            <p class="tilt-hint">Line up Top, 0 line, First bar, and Last bar with the bill graph, then tap Estimate from Photo.</p>
+            <p class="tilt-hint">Line up 0 line, First bar, and Last bar with the bill graph. The entered peak value is assigned to the tallest detected bar.</p>
           </div>
           <div class="photo-status" id="photoStatus" aria-live="polite"></div>
           <p class="helper">Version 1 uses the photo as a reference while you enter the daily-average kWh values manually.</p>
@@ -1751,7 +1751,7 @@
         photoStatus.textContent = 'Estimating daily averages from the photo...';
         const topValue = Number(graphTopValueInput.value);
         if (!Number.isFinite(topValue) || topValue <= 0) {
-          photoStatus.textContent = 'Enter the bill graph top y-axis number first, such as 62 or 1000.';
+          photoStatus.textContent = 'Enter the bill graph peak/top value first, such as 62 or 1000.';
           return;
         }
         const graphTopValue = topValue;
@@ -1771,17 +1771,14 @@
         const selectedBars = bars.length > 13 ? bars.slice(-13) : bars;
         const topY = (Number(topGuidePositionInput.value) || 35) / 100 * analysis.canvas.height;
         const zeroY = (Number(zeroGuidePositionInput.value) || 76) / 100 * analysis.canvas.height;
-        const calibratedHeight = zeroY - topY;
-
-        if (calibratedHeight <= 12) {
+        if (zeroY - topY <= 12) {
           photoStatus.textContent = 'Move the Top guide above the 0 line, then tap Estimate from Photo again.';
           return;
         }
 
-        const values = selectedBars.map((bar) => {
-          const value = ((zeroY - bar.top) / calibratedHeight) * graphTopValue;
-          return Math.min(graphTopValue, Math.max(0, value));
-        });
+        const barHeights = selectedBars.map((bar) => Math.max(0, zeroY - bar.top));
+        const peakHeight = Math.max(...barHeights, 1);
+        const values = barHeights.map((height) => Math.min(graphTopValue, Math.max(0, (height / peakHeight) * graphTopValue)));
         const firstMonth = monthRows[0]?.label || 'first month';
         const lastMonth = monthRows[monthRows.length - 1]?.label || 'last month';
 
@@ -1795,7 +1792,7 @@
         const tiltText = Math.abs(analysis.degrees) >= 0.25
           ? ` Straightened ${analysis.degrees > 0 ? '+' : ''}${analysis.degrees.toFixed(1)} degrees.`
           : '';
-        photoStatus.textContent = `Estimated ${selectedBars.length} daily-average values from the calibrated photo and mapped them to ${firstMonth} through ${lastMonth}.${tiltText} If values look off, align the Top and 0 guide lines to the photo and estimate again.`;
+        photoStatus.textContent = `Estimated ${selectedBars.length} daily-average values from the calibrated photo and mapped them to ${firstMonth} through ${lastMonth}. The tallest bar is set to ${graphTopValue} kWh/day.${tiltText} If values look off, align the 0 line, First bar, and Last bar guides and estimate again.`;
         const inputPanel = document.querySelector('.panel:nth-of-type(3)');
         if (inputPanel) inputPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
       } catch (error) {

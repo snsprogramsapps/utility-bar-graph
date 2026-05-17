@@ -1,4 +1,4 @@
-const CACHE_NAME = 'project-bar-graph-v12';
+const CACHE_NAME = 'project-bar-graph-v13';
 const APP_SHELL = [
   './',
   './index.html',
