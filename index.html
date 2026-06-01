@@ -12,6 +12,7 @@
   <title>Project Bar Graph</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <style>
@@ -236,6 +237,16 @@
       background: #ffffff;
     }
 
+    .detection-overlay {
+      display: none;
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 2;
+    }
+
     .preview-empty {
       color: var(--muted);
       padding: 20px;
@@ -316,12 +327,23 @@
       display: block;
     }
 
+    .preview-wrap.has-detection .detection-overlay {
+      display: block;
+    }
+
     .photo-tools {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 10px;
       align-items: end;
       margin-top: 12px;
+    }
+
+    .detection-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px;
+      margin-top: 10px;
     }
 
     .tilt-control {
@@ -688,6 +710,7 @@
       .bill-controls,
       .photo-actions,
       .photo-tools,
+      .detection-actions,
       .exports,
       .summary-card {
         grid-template-columns: 1fr;
@@ -852,6 +875,7 @@
           </div>
           <div class="preview-wrap" id="previewWrap">
             <img id="imagePreview" alt="Uploaded bill graph preview">
+            <canvas class="detection-overlay" id="detectionOverlay" aria-hidden="true"></canvas>
             <div class="preview-empty" id="previewEmpty">Bill photo preview will appear here so you can read the graph while entering values.</div>
             <div class="preview-guide-line preview-top-line" id="previewTopLine" data-label="Top"></div>
             <div class="preview-guide-line preview-zero-line" id="previewZeroLine" data-label="0 line"></div>
@@ -864,6 +888,11 @@
               <input id="graphTopValue" type="number" inputmode="decimal" min="1" max="10000" step="1" value="39">
             </div>
             <button id="estimatePhotoBtn" type="button" class="secondary" disabled>Estimate from Photo</button>
+          </div>
+          <div class="detection-actions">
+            <button id="autoDetectGraphBtn" type="button" disabled>Auto-detect from graph</button>
+            <button id="redetectGraphBtn" type="button" class="secondary" disabled>Re-detect</button>
+            <button id="confirmDetectedValuesBtn" type="button" class="secondary" disabled>Confirm values</button>
           </div>
           <div class="tilt-control">
             <label for="tiltCorrection">Photo tilt correction</label>
@@ -999,6 +1028,10 @@
     const previewZeroLine = document.getElementById('previewZeroLine');
     const photoStatus = document.getElementById('photoStatus');
     const estimatePhotoBtn = document.getElementById('estimatePhotoBtn');
+    const autoDetectGraphBtn = document.getElementById('autoDetectGraphBtn');
+    const redetectGraphBtn = document.getElementById('redetectGraphBtn');
+    const confirmDetectedValuesBtn = document.getElementById('confirmDetectedValuesBtn');
+    const detectionOverlay = document.getElementById('detectionOverlay');
     const graphTopValueInput = document.getElementById('graphTopValue');
     const tiltCorrectionInput = document.getElementById('tiltCorrection');
     const tiltValueEl = document.getElementById('tiltValue');
@@ -1019,6 +1052,7 @@
     let monthRows = [];
     let usageChart;
     let uploadedImageDataUrl = '';
+    let lastDetection = null;
 
     Chart.register(ChartDataLabels);
 
@@ -1364,16 +1398,18 @@
       const reader = new FileReader();
       reader.onload = (event) => {
         uploadedImageDataUrl = event.target.result;
+        lastDetection = null;
         imagePreview.src = uploadedImageDataUrl;
         imagePreview.style.display = 'block';
         previewEmpty.style.display = 'none';
         previewWrap.classList.add('has-image');
+        previewWrap.classList.remove('has-detection');
         estimatePhotoBtn.disabled = false;
-        photoStatus.textContent = 'Photo loaded. Confirm the bill month/year above matches the last month shown on the photo graph, then tap Estimate from Photo.';
-
-        // Future OCR/image recognition hook:
-        // Analyze the uploaded SCE bill graph image here to detect bar heights
-        // and prefill dailyAverage values before the consultant reviews them.
+        autoDetectGraphBtn.disabled = false;
+        redetectGraphBtn.disabled = false;
+        confirmDetectedValuesBtn.disabled = true;
+        clearDetectionOverlay();
+        photoStatus.textContent = 'Cropped graph loaded. Tap Auto-detect from graph to read the bars, or use the manual controls as backup.';
       };
       reader.readAsDataURL(file);
     }
@@ -1741,6 +1777,257 @@
       };
     }
 
+    function clearDetectionOverlay() {
+      const ctx = detectionOverlay.getContext('2d');
+      detectionOverlay.width = Math.max(1, previewWrap.clientWidth);
+      detectionOverlay.height = Math.max(1, previewWrap.clientHeight);
+      ctx.clearRect(0, 0, detectionOverlay.width, detectionOverlay.height);
+    }
+
+    function getPreviewImageRect() {
+      const wrapRect = previewWrap.getBoundingClientRect();
+      const imageRect = imagePreview.getBoundingClientRect();
+      return {
+        x: imageRect.left - wrapRect.left,
+        y: imageRect.top - wrapRect.top,
+        width: imageRect.width,
+        height: imageRect.height
+      };
+    }
+
+    function drawDetectionOverlay(detection) {
+      clearDetectionOverlay();
+      if (!detection?.frame || !detection?.canvas) return;
+
+      const rect = getPreviewImageRect();
+      const scaleX = rect.width / detection.canvas.width;
+      const scaleY = rect.height / detection.canvas.height;
+      const ctx = detectionOverlay.getContext('2d');
+
+      detectionOverlay.width = Math.max(1, previewWrap.clientWidth);
+      detectionOverlay.height = Math.max(1, previewWrap.clientHeight);
+      ctx.clearRect(0, 0, detectionOverlay.width, detectionOverlay.height);
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#d92d20';
+      ctx.fillStyle = '#d92d20';
+
+      const frame = detection.frame;
+      const boxX = rect.x + frame.left * scaleX;
+      const boxY = rect.y + frame.top * scaleY;
+      const boxW = (frame.right - frame.left) * scaleX;
+      const boxH = (frame.baseline - frame.top) * scaleY;
+      ctx.strokeRect(boxX, boxY, boxW, boxH);
+
+      ctx.strokeStyle = '#ea580c';
+      ctx.beginPath();
+      ctx.moveTo(boxX, rect.y + frame.baseline * scaleY);
+      ctx.lineTo(boxX + boxW, rect.y + frame.baseline * scaleY);
+      ctx.stroke();
+
+      ctx.strokeStyle = '#1c75bc';
+      ctx.beginPath();
+      ctx.moveTo(boxX, boxY);
+      ctx.lineTo(boxX + boxW, boxY);
+      ctx.stroke();
+
+      ctx.fillStyle = '#d92d20';
+      detection.bars.forEach((bar) => {
+        const x = rect.x + bar.center * scaleX;
+        const y = rect.y + bar.top * scaleY;
+        ctx.beginPath();
+        ctx.arc(x, y, 4, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      previewWrap.classList.add('has-detection');
+    }
+
+    function updateGuidesFromDetection(detection) {
+      if (!detection?.frame || !detection?.canvas || !detection.bars.length) return;
+      const { frame, canvas, bars } = detection;
+      topGuidePositionInput.value = Math.round(frame.top / canvas.height * 100);
+      zeroGuidePositionInput.value = Math.round(frame.baseline / canvas.height * 100);
+      firstBarPositionInput.value = Math.round(bars[0].center / canvas.width * 100);
+      lastBarPositionInput.value = Math.round(bars[bars.length - 1].center / canvas.width * 100);
+      updateCalibrationGuides();
+    }
+
+    function pickBarsForTable(bars) {
+      if (bars.length >= 13) {
+        return { bars: bars.slice(-13), startIndex: 0 };
+      }
+      if (bars.length === 12) {
+        return { bars, startIndex: Math.max(0, monthRows.length - 12) };
+      }
+      return { bars, startIndex: Math.max(0, monthRows.length - bars.length) };
+    }
+
+    function applyDetectedValues(detection) {
+      const topValue = Number(graphTopValueInput.value);
+      if (!Number.isFinite(topValue) || topValue <= 0) {
+        photoStatus.textContent = 'Enter the max kWh/day value from the y-axis, then detect again.';
+        return false;
+      }
+
+      const selected = pickBarsForTable(detection.bars);
+      const plotHeight = Math.max(1, detection.frame.baseline - detection.frame.top);
+      selected.bars.forEach((bar, offset) => {
+        const rowIndex = selected.startIndex + offset;
+        if (!monthRows[rowIndex]) return;
+        const height = Math.max(0, detection.frame.baseline - bar.top);
+        monthRows[rowIndex].dailyAverage = Math.round(Math.min(topValue, height / plotHeight * topValue) * 10) / 10;
+      });
+
+      renderTable();
+      calculateAndRender();
+      return true;
+    }
+
+    function buildCroppedGraphDetection(analysis) {
+      const result = findBillGraphBars(analysis.pixels, analysis.canvas.width, analysis.canvas.height);
+      if (!result.frame) return null;
+
+      let bars = result.bars
+        .filter((bar) => bar.height > Math.max(5, (result.frame.baseline - result.frame.top) * 0.035))
+        .sort((a, b) => a.center - b.center);
+
+      if (bars.length > 13) bars = bars.slice(-13);
+      const plotHeight = result.frame.baseline - result.frame.top;
+      const confidence = Math.min(1, (bars.length / 12) * 0.55 + Math.min(1, plotHeight / (analysis.canvas.height * 0.3)) * 0.45);
+
+      return {
+        canvas: analysis.canvas,
+        frame: result.frame,
+        bars,
+        degrees: analysis.degrees,
+        method: result.method,
+        confidence
+      };
+    }
+
+    function cropCanvas(sourceCanvas, x, y, width, height) {
+      const crop = document.createElement('canvas');
+      crop.width = Math.max(1, Math.round(width));
+      crop.height = Math.max(1, Math.round(height));
+      const ctx = crop.getContext('2d', { willReadFrequently: true });
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, crop.width, crop.height);
+      ctx.drawImage(sourceCanvas, x, y, width, height, 0, 0, crop.width, crop.height);
+      return crop;
+    }
+
+    function detectLastMonthFromOcr(text) {
+      const matches = [...text.matchAll(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s*'?((?:20)?\d{2})?/gi)];
+      if (!matches.length) return null;
+
+      const last = matches[matches.length - 1];
+      const monthIndex = monthShort.findIndex((month) => normalizeMonthToken(month) === normalizeMonthToken(last[1]));
+      if (monthIndex < 0) return null;
+
+      let year = Number(currentYearInput.value) || new Date().getFullYear();
+      if (last[2]) {
+        const rawYear = Number(last[2]);
+        year = rawYear < 100 ? 2000 + rawYear : rawYear;
+      }
+
+      return { monthIndex, year };
+    }
+
+    async function runCroppedGraphOcr(detection) {
+      if (!window.Tesseract || !detection?.canvas || !detection?.frame) return {};
+
+      const { canvas, frame } = detection;
+      const leftCrop = cropCanvas(
+        canvas,
+        0,
+        Math.max(0, frame.top - 45),
+        Math.min(canvas.width, frame.left + 80),
+        Math.min(canvas.height, frame.baseline - frame.top + 70)
+      );
+      const bottomCrop = cropCanvas(
+        canvas,
+        Math.max(0, frame.left - 25),
+        Math.max(0, frame.baseline - 8),
+        Math.min(canvas.width - Math.max(0, frame.left - 25), frame.right - frame.left + 80),
+        Math.min(canvas.height - Math.max(0, frame.baseline - 8), 85)
+      );
+
+      const [axisResult, monthResult] = await Promise.all([
+        Tesseract.recognize(leftCrop, 'eng', {
+          logger: () => {},
+          tessedit_char_whitelist: '0123456789'
+        }),
+        Tesseract.recognize(bottomCrop, 'eng', { logger: () => {} })
+      ]);
+
+      const axisNumbers = (axisResult?.data?.text?.match(/\d+(?:\.\d+)?/g) || [])
+        .map(Number)
+        .filter((value) => Number.isFinite(value) && value > 0 && value <= 500);
+      const topScale = axisNumbers.length ? Math.max(...axisNumbers) : null;
+      const lastMonth = detectLastMonthFromOcr(monthResult?.data?.text || '');
+
+      return { topScale, lastMonth };
+    }
+
+    async function autoDetectFromGraph() {
+      if (!uploadedImageDataUrl) {
+        photoStatus.textContent = 'Upload a cropped SCE usage graph first.';
+        return;
+      }
+
+      try {
+        photoStatus.textContent = 'Detecting the cropped usage graph...';
+        const image = await loadImage(uploadedImageDataUrl);
+        const analysis = prepareAnalysisImage(image);
+        const detection = buildCroppedGraphDetection(analysis);
+
+        if (!detection || detection.bars.length < 10) {
+          clearDetectionOverlay();
+          confirmDetectedValuesBtn.disabled = true;
+          photoStatus.textContent = 'Graph detection was uncertain. Please adjust the crop, baseline, or max kWh/day.';
+          return;
+        }
+
+        lastDetection = detection;
+        let ocrText = '';
+        try {
+          const ocr = await runCroppedGraphOcr(detection);
+          if (ocr.topScale) {
+            graphTopValueInput.value = String(ocr.topScale);
+            ocrText += ` OCR read ${ocr.topScale} as the max kWh/day.`;
+          }
+          if (ocr.lastMonth) {
+            ocrText += ` OCR saw a month label near ${monthShort[ocr.lastMonth.monthIndex]} '${String(ocr.lastMonth.year).slice(-2)}, but kept your selected bill month/year.`;
+          }
+        } catch (error) {
+          ocrText = ' OCR was not confident, so the selected bill month and max kWh/day input were used.';
+        }
+        updateGuidesFromDetection(detection);
+        drawDetectionOverlay(detection);
+        const applied = detection.bars.length >= 12 && applyDetectedValues(detection);
+        confirmDetectedValuesBtn.disabled = !applied;
+        const tiltText = Math.abs(detection.degrees) >= 0.25
+          ? ` Auto-straightened ${detection.degrees > 0 ? '+' : ''}${detection.degrees.toFixed(1)} degrees.`
+          : '';
+
+        photoStatus.textContent = applied
+          ? `Detected ${detection.bars.length} bars from the cropped graph and filled the table.${ocrText}${tiltText} Review the values, then confirm or edit manually.`
+          : `Graph detection was uncertain. Please adjust the crop, baseline, or max kWh/day.`;
+      } catch (error) {
+        photoStatus.textContent = 'Graph detection was uncertain. Please adjust the crop, baseline, or max kWh/day.';
+      }
+    }
+
+    function confirmDetectedValues() {
+      if (!lastDetection) {
+        photoStatus.textContent = 'Run Auto-detect from graph first.';
+        return;
+      }
+      if (applyDetectedValues(lastDetection)) {
+        photoStatus.textContent = 'Detected values confirmed. Manual table editing remains available if you need to fine tune anything.';
+      }
+    }
+
     async function estimateFromPhoto() {
       if (!uploadedImageDataUrl) {
         photoStatus.textContent = 'Upload or take a bill photo first.';
@@ -1863,12 +2150,18 @@
     document.getElementById('cameraInput').addEventListener('change', (event) => handleImage(event.target.files[0]));
     document.getElementById('uploadInput').addEventListener('change', (event) => handleImage(event.target.files[0]));
     estimatePhotoBtn.addEventListener('click', estimateFromPhoto);
+    autoDetectGraphBtn.addEventListener('click', autoDetectFromGraph);
+    redetectGraphBtn.addEventListener('click', autoDetectFromGraph);
+    confirmDetectedValuesBtn.addEventListener('click', confirmDetectedValues);
     importAiValuesBtn.addEventListener('click', importAiValues);
     tiltCorrectionInput.addEventListener('input', updateTiltGuide);
     topGuidePositionInput.addEventListener('input', updateCalibrationGuides);
     zeroGuidePositionInput.addEventListener('input', updateCalibrationGuides);
     firstBarPositionInput.addEventListener('input', updateCalibrationGuides);
     lastBarPositionInput.addEventListener('input', updateCalibrationGuides);
+    window.addEventListener('resize', () => {
+      if (lastDetection) drawDetectionOverlay(lastDetection);
+    });
     document.getElementById('exportPngBtn').addEventListener('click', exportPng);
     document.getElementById('exportPdfBtn').addEventListener('click', exportPdf);
   </script>
