@@ -1418,7 +1418,7 @@
       const luma = (r * 0.299) + (g * 0.587) + (b * 0.114);
       const max = Math.max(r, g, b);
       const min = Math.min(r, g, b);
-      return luma < 118 && max - min < 72;
+      return luma < 172 && max - min < 82;
     }
 
     function darkRunOnRow(imageData, width, y, xStart, xEnd) {
