@@ -903,12 +903,12 @@
           </div>
           <div class="calibration-controls">
             <div class="calibration-control">
-              <label for="topGuidePosition">Top guide line <span class="calibration-value" id="topGuideValue">35%</span></label>
-              <input id="topGuidePosition" type="range" min="12" max="70" step="1" value="35">
+              <label for="topGuidePosition">Top guide line <span class="calibration-value" id="topGuideValue">35.0%</span></label>
+              <input id="topGuidePosition" type="range" min="12" max="70" step="0.2" value="35">
             </div>
             <div class="calibration-control">
-              <label for="zeroGuidePosition">Zero baseline <span class="calibration-value" id="zeroGuideValue">76%</span></label>
-              <input id="zeroGuidePosition" type="range" min="45" max="92" step="1" value="76">
+              <label for="zeroGuidePosition">Zero baseline <span class="calibration-value" id="zeroGuideValue">76.0%</span></label>
+              <input id="zeroGuidePosition" type="range" min="45" max="92" step="0.2" value="76">
             </div>
             <div class="calibration-control">
               <label for="firstBarPosition">First bar center <span class="calibration-value" id="firstBarValue">20%</span></label>
@@ -1068,8 +1068,8 @@
       const zeroPct = Number(zeroGuidePositionInput.value) || 76;
       const firstPct = Number(firstBarPositionInput.value) || 20;
       const lastPct = Number(lastBarPositionInput.value) || 88;
-      topGuideValueEl.textContent = `${topPct}%`;
-      zeroGuideValueEl.textContent = `${zeroPct}%`;
+      topGuideValueEl.textContent = `${topPct.toFixed(1)}%`;
+      zeroGuideValueEl.textContent = `${zeroPct.toFixed(1)}%`;
       firstBarValueEl.textContent = `${firstPct}%`;
       lastBarValueEl.textContent = `${lastPct}%`;
       previewTopLine.style.top = `${topPct}%`;
